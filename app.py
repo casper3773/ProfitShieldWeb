@@ -87,9 +87,9 @@ def get_live_rate(currency_code="USD"):
 @app.route('/')
 @login_required
 def home():
-    # 🚨 GÜVENLİK KONTROLÜ: Eğer kullanıcı PRO değilse doğrudan ödeme sayfasına gitsin
+    # 🚨 GÜVENLİK KONTROLÜ: Eğer kullanıcı PRO değilse doğrudan Lemon Squeezy ödeme ekranına yönlendir!
     if not current_user.is_subscribed:
-        return render_template('subscribe.html')  # Ödeme butonunun olduğu sayfa
+        return redirect(url_for('create_checkout_session'))
         
     rate = get_live_rate("USD")
     rate_text = f"Live USD Rate: ₺{rate:.2f}" if rate else "Live Rate: Connection Error"
