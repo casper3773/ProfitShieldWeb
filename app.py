@@ -12,7 +12,6 @@ import hmac
 import hashlib
 from dotenv import load_dotenv
 
-# .env içerisindeki verileri yükle
 load_dotenv()
 
 app = Flask(__name__)
@@ -20,18 +19,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-this-later')
 app.secret_key = app.config['SECRET_KEY']
 
-# --- LEMON SQUEEZY CONFIG ---
-# Lemon Squeezy panelinden alacağın Webhook Secret Anahtarı
 LEMON_WEBHOOK_SECRET = os.environ.get('LEMON_WEBHOOK_SECRET')
-# Lemon Squeezy panelinde oluşturduğun PRO abonelik ödeme linki
 LEMON_CHECKOUT_URL = os.environ.get('LEMON_CHECKOUT_URL')
 
-# --- FLASK LOGIN AYARLARI ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# --- VERİTABANI BAŞLATMA (SQLite3) ---
 def init_db():
     conn = sqlite3.connect('profitshield.db')
     cursor = conn.cursor()
@@ -49,7 +43,6 @@ def init_db():
 
 init_db()
 
-# Kullanıcı Sınıfı
 class User(UserMixin):
     def __init__(self, id, username, email, is_subscribed):
         self.id = id
@@ -68,7 +61,6 @@ def load_user(user_id):
         return User(user_data[0], user_data[1], user_data[2], user_data[3])
     return None
 
-# --- ÖZEL ABONELİK KONTROLÜ (DECORATOR) ---
 def subscription_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -79,7 +71,6 @@ def subscription_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- CANLI KUR ÇEKME FONKSİYONU ---
 def get_live_rate(currency_code="USD"):
     try:
         url = f"https://open.er-api.com/v6/latest/{currency_code}"
@@ -90,8 +81,6 @@ def get_live_rate(currency_code="USD"):
         return None
     except:
         return None
-
-# --- ROTALAR (ROUTES) ---
 
 @app.route('/')
 def home():
@@ -250,20 +239,13 @@ def process_report():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-
-# --- LEMON SQUEEZY YÖNLENDİRME VE WEBHOOK ROTALARI ---
-
 @app.route('/create-checkout-session', methods=['POST'])
 @login_required
 def create_checkout_session():
-    # Lemon Squeezy'de dinamik session üretmeye gerek yoktur.
-    # Kullanıcıyı önceden oluşturduğumuz checkout linkine e-posta parametresiyle paslarız.
     if LEMON_CHECKOUT_URL:
-        # Müşterinin e-postasını linke ekleyerek ödeme sayfasında otomatik dolmasını sağlıyoruz
         checkout_link = f"{LEMON_CHECKOUT_URL}?checkout[email]={current_user.email}"
         return redirect(checkout_link, code=303)
     
-    # Eğer henüz link eklenmediyse yerelde işlerin aksamaması için yedek simülasyon:
     conn = sqlite3.connect('profitshield.db')
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (current_user.id,))
@@ -272,15 +254,12 @@ def create_checkout_session():
     flash("Lemon Squeezy Linki bulunamadı, yerel simülasyon aktif edildi! PRO oldunuz.", "success")
     return redirect(url_for('home'))
 
-
 @app.route('/lemon-webhook', methods=['POST'])
 def lemon_webhook():
-    # Lemon Squeezy güvenliği sağlamak için gelen veriyi hashleyip X-Signature header'ına koyar
     signature = request.headers.get('X-Signature')
     if not signature:
         return 'Missing signature', 400
 
-    # İmzayı bizim gizli anahtarımızla doğrula
     secret = bytes(LEMON_WEBHOOK_SECRET, 'utf-8') if LEMON_WEBHOOK_SECRET else b''
     digest = hmac.new(secret, request.data, hashlib.sha256).hexdigest()
     
@@ -290,7 +269,6 @@ def lemon_webhook():
     event_data = request.json
     event_name = event_data.get('meta', {}).get('event_name')
     
-    # Kullanıcı başarıyla abone olduğunda tetiklenir
     if event_name in ['subscription_created', 'subscription_payment_success']:
         customer_email = event_data.get('data', {}).get('attributes', {}).get('user_email')
         if customer_email:
@@ -300,7 +278,6 @@ def lemon_webhook():
             conn.commit()
             conn.close()
             
-    # Kullanıcı aboneliğini iptal ettiğinde veya süresi bittiğinde tetiklenir
     elif event_name in ['subscription_cancelled', 'subscription_expired']:
         customer_email = event_data.get('data', {}).get('attributes', {}).get('user_email')
         if customer_email:
@@ -312,8 +289,6 @@ def lemon_webhook():
 
     return 'OK', 200
 
-
 if __name__ == '__main__':
-
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
