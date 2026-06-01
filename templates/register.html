@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ProfitShield - Register</title>
+    <style>
+        body { background-color: #1e1e2e; color: #cdd6f4; font-family: sans-serif; display: flex; justify-content: center; padding-top: 100px; }
+        .box { background-color: #252538; padding: 30px; border-radius: 8px; border: 1px solid #45475a; width: 300px; }
+        h2 { color: #89b4fa; text-align: center; margin-top: 0; }
+        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 10px; margin: 10px 0; background-color: #313244; border: 1px solid #45475a; color: #cdd6f4; border-radius: 4px; box-sizing: border-box; }
+        .btn { background-color: #a6e3a1; color: #1e1e2e; width: 100%; padding: 10px; border: none; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .switch { display: flex; align-items: center; gap: 10px; margin: 15px 0; font-size: 13px; color: #fab387; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Create Account</h2>
+        <form method="POST">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="email" name="email" placeholder="Email Address" required>
+            <input type="password" name="password" placeholder="Password" required>
+            
+            <div class="switch">
+                <input type="checkbox" name="subscribe_me" id="sub" checked>
+                <label for="sub">Simulate Paid Subscription Plan</label>
+            </div>
+            
+            <button type="submit" class="btn">Register</button>
+        </form>
+        <p style="font-size: 12px; text-align: center; margin-top: 15px;"><a href="/login" style="color: #89b4fa;">Already have an account? Login</a></p>
+    </div>
+</body>
+</html>

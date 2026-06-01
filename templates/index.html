@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProfitShield Web - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Catppuccin Mocha Tema Renkleri */
+        body {
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #252538;
+            border: 1px solid #45475a;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        h1 {
+            color: #89b4fa;
+            text-align: center;
+            margin-top: 0;
+            font-size: 24px;
+            letter-spacing: 1px;
+        }
+        .rate-badge {
+            text-align: center;
+            color: #fab387;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .divider {
+            height: 1px;
+            background-color: #45475a;
+            margin: 15px 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #a6adc8;
+        }
+        .row {
+            display: flex;
+            gap: 15px;
+        }
+        .col-3 { flex: 3; }
+        .col-1 { flex: 1; }
+        .col-4 { flex: 1; }
+
+        select, input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            background-color: #313244;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            color: #cdd6f4;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        select:focus, input:focus {
+            border-color: #89b4fa;
+            outline: none;
+        }
+        .currency-select {
+            color: #94e2d5;
+            border: 1px solid #94e2d5;
+        }
+        
+        .dropzone-area {
+            border: 2px dashed #89b4fa;
+            background-color: #181825;
+            border-radius: 6px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .dropzone-area.dragover {
+            border-color: #a6e3a1;
+            background-color: #313244;
+            transform: scale(1.02);
+        }
+        .dropzone-text {
+            color: #a6adc8;
+            font-weight: bold;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        /* Önizleme Tablosu Tasarımı */
+        .preview-container {
+            margin-top: 15px;
+            display: none;
+            background-color: #181825;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        .preview-title {
+            color: #f5e0dc;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #313244;
+            color: #89b4fa;
+            padding: 8px;
+            border-bottom: 1px solid #45475a;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #313244;
+            color: #cdd6f4;
+            white-space: nowrap;
+        }
+
+        .btn-process {
+            background-color: #a6e3a1;
+            color: #1e1e2e;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            width: 100%;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-process:hover { opacity: 0.9; }
+        .btn-process:disabled { background-color: #45475a; color: #a6adc8; cursor: not-allowed; }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid #1e1e2e;
+            border-top: 3px solid transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .insights-box {
+            background-color: #181825;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .insights-title {
+            color: #f5e0dc;
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        .insight-item {
+            color: #f5e0dc;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+
+        /* Grafik Kutusu */
+        .chart-container {
+            margin-top: 15px;
+            background-color: #181825;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 15px;
+            display: none;
+        }
+
+        /* Catppuccin Uyumlu Stripe Abonelik Kutusu */
+        .subscription-status-box {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            background-color: #181825;
+            border: 1px solid #45475a;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>PROFITSHIELD PRO</h1>
+    
+    <div style="text-align: center; margin-bottom: 10px; font-size: 13px;">
+        {% if current_user.is_authenticated %}
+            <span>Welcome, <b style="color: #a6e3a1;">{{ current_user.username }}</b>! 
+            {% if current_user.is_subscribed %}
+                <span style="color: #89b4fa;">[PRO SUBSCRIBER]</span>
+            {% else %}
+                <span style="color: #f38ba8;">[FREE USER - NO ACCESS]</span>
+            {% endif %}
+            | <a href="/logout" style="color: #f38ba8; text-decoration: none;">Logout</a></span>
+        {% else %}
+            <span>You are browsing as Guest. <a href="/login" style="color: #89b4fa; font-weight: bold;">Login</a> or <a href="/register" style="color: #a6e3a1; font-weight: bold;">Register</a> to process reports.</span>
+        {% endif %}
+    </div>
+
+    {% if current_user.is_authenticated %}
+        <div class="subscription-status-box">
+            {% if current_user.is_subscribed %}
+                <span style="color: #a6e3a1; font-weight: bold; display: inline-flex; align-items: center; font-size: 14px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    ProfitShield PRO Aktif
+                </span>
+            {% else %}
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+                    <div>
+                        <h5 style="margin: 0; color: #f9e2af; font-size: 14px; font-weight: bold;">ProfitShield PRO'ya Yükselt</h5>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #a6adc8;">Aylık sadece 15$ karşılığında sınırsız dosya işleyin ve kârınızı koruyun.</p>
+                    </div>
+                    <form action="{{ url_for('create_checkout_session') }}" method="POST" style="margin: 0;">
+                        <button type="submit" style="background-color: #cba6f7; color: #11111b; border: none; padding: 8px 14px; font-weight: bold; font-size: 13px; border-radius: 4px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap;">
+                            Upgrade to PRO ($15/mo)
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <div class="rate-badge">{{ usd_rate }}</div>
+    
+    <div class="form-group">
+        <input type="file" id="excel-file" accept=".xlsx, .xls, .csv" style="display: none;">
+        <div class="dropzone-area" id="dropzone" onclick="document.getElementById('excel-file').click()">
+            <div class="dropzone-text" id="dropzone-label">DRAG & DROP INVENTORY EXCEL OR CLICK TO SELECT</div>
+        </div>
+    </div>
+
+    <div class="preview-container" id="preview-box">
+        <div class="preview-title">Live File Preview (First 5 Rows)</div>
+        <div style="overflow-x: auto;">
+            <table id="preview-table">
+                <thead id="table-head"></thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <div class="row">
+        <div class="form-group col-3">
+            <label>Select Marketplace Preset</label>
+            <select id="marketplace" onchange="applyMarketplacePreset()">
+                <option value="custom">Manual (Custom)</option>
+                <option value="15">Amazon.com (Global - %15)</option>
+                <option value="20">Trendyol (TR - %20)</option>
+                <option value="18">Hepsiburada (TR - %18)</option>
+                <option value="12">eBay (Global - %12)</option>
+                <option value="6.5">Etsy (Global - %6.5)</option>
+            </select>
+        </div>
+        <div class="form-group col-1">
+            <label style="color: #94e2d5; font-weight: bold;">Currency</label>
+            <select id="currency" class="currency-select" onchange="fetchNewRate()">
+                <option value="$">$</option>
+                <option value="₺">₺</option>
+                <option value="€">€</option>
+                <option value="£">£</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <label style="font-weight: bold; margin-bottom: 10px;">PRICING PARAMETERS</label>
+    <div class="row">
+        <div class="form-group col-4">
+            <label>VAT %</label>
+            <input type="text" id="input-vat" value="20">
+        </div>
+        <div class="form-group col-4">
+            <label>Comm %</label>
+            <input type="text" id="input-comm" value="15">
+        </div>
+        <div class="form-group col-4">
+            <label>Shipping</label>
+            <input type="text" id="input-shipping" value="0">
+        </div>
+        <div class="form-group col-4">
+            <label>Target Profit %</label>
+            <input type="text" id="input-profit" value="10">
+        </div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <div class="form-group">
+        <label>SELECT COST COLUMN (PURCHASE PRICE)</label>
+        <select id="cost-column" disabled>
+            <option>Select an Excel file first...</option>
+        </select>
+    </div>
+    
+    <button type="submit" class="btn-process">
+        <div class="spinner" id="btn-spinner"></div>
+        <span id="btn-text">GENERATE PROFIT REPORT</span>
+    </button>
+    
+    <div class="divider"></div>
+    
+    <div class="insights-box">
+        <div class="insights-title">Quick Insights</div>
+        <div class="insight-item">Total Revenue: $0.00</div>
+        <div class="insight-item">Total Net Profit: $0.00</div>
+        <div class="insight-item">Average Margin: 0%</div>
+    </div>
+
+    <div class="chart-container" id="chart-box">
+        <div class="insights-title">Estimated Net Profit per Product</div>
+        <canvas id="profitChart"></canvas>
+    </div>
+</div>
+
+<script>
+const fileInput = document.getElementById('excel-file');
+const dropzone = document.getElementById('dropzone');
+const dropzoneLabel = document.getElementById('dropzone-label');
+const costColumnSelect = document.getElementById('cost-column');
+let myChart = null;
+
+function applyMarketplacePreset() {
+    const marketplaceSelect = document.getElementById('marketplace');
+    const commInput = document.getElementById('input-comm');
+    if (marketplaceSelect.value !== "custom") {
+        commInput.value = marketplaceSelect.value;
+    }
+}
+
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+    dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileProcessing(e.dataTransfer.files[0]);
+    }
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) {
+        handleFileProcessing(fileInput.files[0]);
+    }
+});
+
+function handleFileProcessing(file) {
+    dropzoneLabel.innerText = "SELECTED: " + file.name;
+    dropzone.style.borderColor = "#a6e3a1";
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    costColumnSelect.innerHTML = "<option>Reading columns...</option>";
+    
+    fetch('/api/read-columns', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) throw new Error("File reading unauthorized or failed");
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            costColumnSelect.innerHTML = "";
+            costColumnSelect.disabled = false;
+            data.columns.forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.innerText = col;
+                costColumnSelect.appendChild(opt);
+            });
+            
+            const thead = document.getElementById('table-head');
+            const tbody = document.getElementById('table-body');
+            thead.innerHTML = "";
+            tbody.innerHTML = "";
+            
+            const visibleCols = data.columns.slice(0, 4);
+            const trHead = document.createElement('tr');
+            visibleCols.forEach(col => {
+                const th = document.createElement('th');
+                th.innerText = col;
+                trHead.appendChild(th);
+            });
+            thead.appendChild(trHead);
+            
+            data.preview.forEach(row => {
+                const trRow = document.createElement('tr');
+                visibleCols.forEach(col => {
+                    const td = document.createElement('td');
+                    td.innerText = row[col];
+                    trRow.appendChild(td);
+                });
+                tbody.appendChild(trRow);
+            });
+            
+            document.getElementById('preview-box').style.display = "block";
+        } else {
+            costColumnSelect.innerHTML = "<option>Error reading columns</option>";
+        }
+    })
+    .catch(error => {
+        costColumnSelect.innerHTML = "<option>Please login to read columns</option>";
+    });
+}
+
+function fetchNewRate() {
+    const currencySelect = document.getElementById('currency');
+    const selectedSymbol = currencySelect.value;
+    const rateBadge = document.querySelector('.rate-badge');
+    
+    rateBadge.innerText = "Fetching Live Rate...";
+    
+    fetch('/api/get-rate/' + encodeURIComponent(selectedSymbol))
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                rateBadge.innerText = data.text;
+            } else {
+                rateBadge.innerText = "Error Fetching Rate";
+            }
+        })
+        .catch(error => {
+            rateBadge.innerText = "Connection Error";
+        });
+}
+
+document.querySelector('.btn-process').addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    const costColumn = costColumnSelect.value;
+    const currency = document.getElementById('currency').value;
+    
+    const vat = document.getElementById('input-vat').value;
+    const comm = document.getElementById('input-comm').value;
+    const shipping = document.getElementById('input-shipping').value;
+    const targetProfit = document.getElementById('input-profit').value;
+    
+    if (fileInput.files.length === 0) {
+        alert("Please select or drag an Excel file first!");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('cost_column', costColumn);
+    formData.append('vat', vat);
+    formData.append('comm', comm);
+    formData.append('shipping', shipping);
+    formData.append('target_profit', targetProfit);
+    formData.append('currency', currency);
+    
+    const processBtn = document.querySelector('.btn-process');
+    const btnSpinner = document.getElementById('btn-spinner');
+    const btnText = document.getElementById('btn-text');
+    
+    btnSpinner.style.display = "block";
+    btnText.innerText = "PROCESSING REPORT...";
+    processBtn.disabled = true;
+    
+    fetch('/api/process-report', {
+        method: 'POST',
+        body: formData
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || "Calculation failed. Please check your login status.");
+        }
+        
+        document.querySelectorAll('.insight-item')[0].innerText = "Total Revenue: " + response.headers.get('X-Total-Revenue');
+        document.querySelectorAll('.insight-item')[1].innerText = "Total Net Profit: " + response.headers.get('X-Total-Profit');
+        document.querySelectorAll('.insight-item')[2].innerText = "Average Margin: " + response.headers.get('X-Average-Margin');
+        
+        const labels = JSON.parse(response.headers.get('X-Chart-Labels') || "[]");
+        const values = JSON.parse(response.headers.get('X-Chart-Values') || "[]");
+        
+        if (labels.length > 0) {
+            document.getElementById('chart-box').style.display = "block";
+            const ctx = document.getElementById('profitChart').getContext('2d');
+            if (myChart) { myChart.destroy(); }
+            
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Net Profit (' + currency + ')',
+                        data: values,
+                        backgroundColor: '#89b4fa',
+                        borderColor: '#b4befe',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#313244' },
+                            ticks: { color: '#cdd6f4' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#cdd6f4' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#cdd6f4' } }
+                    }
+                }
+            });
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "ProfitShield_Target_Prices.xlsx";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        
+        btnSpinner.style.display = "none";
+        btnText.innerText = "GENERATE PROFIT REPORT";
+        processBtn.disabled = false;
+    })
+    .catch(error => {
+        alert(error.message);
+        btnSpinner.style.display = "none";
+        btnText.innerText = "GENERATE PROFIT REPORT";
+        processBtn.disabled = false;
+    });
+});
+</script>
+</body>
+</html>
