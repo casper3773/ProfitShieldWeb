@@ -1,7 +1,8 @@
+--only-binary=:all:
 Flask
 Flask-Login
+requests
 pandas
 numpy
 openpyxl
-requests
 gunicorn
