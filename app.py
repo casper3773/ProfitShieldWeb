@@ -248,7 +248,7 @@ def process_report():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-@app.route('/create-checkout-session', methods=['POST'])
+@app.route('/create-checkout-session', methods=['GET', 'POST'])
 @login_required
 def create_checkout_session():
     if LEMON_CHECKOUT_URL:
