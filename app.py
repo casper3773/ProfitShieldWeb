@@ -82,8 +82,15 @@ def get_live_rate(currency_code="USD"):
     except:
         return None
 
+# --- ROTALAR (ROUTES) ---
+
 @app.route('/')
+@login_required
 def home():
+    # 🚨 GÜVENLİK KONTROLÜ: Eğer kullanıcı PRO değilse doğrudan ödeme sayfasına gitsin
+    if not current_user.is_subscribed:
+        return render_template('subscribe.html')  # Ödeme butonunun olduğu sayfa
+        
     rate = get_live_rate("USD")
     rate_text = f"Live USD Rate: ₺{rate:.2f}" if rate else "Live Rate: Connection Error"
     return render_template('index.html', usd_rate=rate_text)
@@ -94,7 +101,9 @@ def register():
         username = request.form.get('username')
         email = request.form.get('email')
         password = request.form.get('password')
-        is_subscribed = 1 if request.form.get('subscribe_me') == 'on' else 0
+        
+        # 🚨 GÜVENLİK DÜZELTMESİ: Yeni kayıt olan herkes kesinlikle 0 (Ücretsiz) başlar!
+        is_subscribed = 0 
         
         hashed_password = generate_password_hash(password)
         
@@ -246,6 +255,7 @@ def create_checkout_session():
         checkout_link = f"{LEMON_CHECKOUT_URL}?checkout[email]={current_user.email}"
         return redirect(checkout_link, code=303)
     
+    # Yedek simülasyon (Gerçek canlıda burası çalışmaz, üstteki if bloğu çalışır)
     conn = sqlite3.connect('profitshield.db')
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (current_user.id,))
