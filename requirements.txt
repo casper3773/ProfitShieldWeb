@@ -7,3 +7,5 @@ pandas
 numpy
 openpyxl
 gunicorn
+iyzipay
+pysqlite3-binary
