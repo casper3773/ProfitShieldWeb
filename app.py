@@ -20,7 +20,7 @@ IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'sandbox-test-api-key')
 IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'sandbox-test-secret-key')
 IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com'
 
-# iYziCo Python SDK düz bir dictionary bekler:
+# iYziCo Python SDK için standart dictionary yapısı
 iyzico_options = {
     'api_key': IYZICO_API_KEY,
     'secret_key': IYZICO_SECRET_KEY,
@@ -201,10 +201,12 @@ def iyzico_payment():
         'basketItems': [basket_item]
     }
 
-    checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
-    payment_form_html = checkout_form_initialize.get('checkoutFormContent')
-    
-    return render_template('iyzico_payment.html', payment_form=payment_form_html)
+    try:
+        checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
+        payment_form_html = checkout_form_initialize.get('checkoutFormContent')
+        return render_template('iyzico_payment.html', payment_form=payment_form_html)
+    except Exception as e:
+        return f"iYziCo Form Error: {str(e)}"
 
 @app.route('/iyzico-callback', methods=['POST'])
 def iyzico_callback():
