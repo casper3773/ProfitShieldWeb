@@ -20,11 +20,10 @@ IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'sandbox-test-api-key')
 IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'sandbox-test-secret-key')
 IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com'
 
-iyzico_options = {
-    'api_key': IYZICO_API_KEY,
-    'secret_key': IYZICO_SECRET_KEY,
-    'base_url': IYZICO_BASE_URL
-}
+iyzico_options = iyzipay.Options()
+iyzico_options.api_key = IYZICO_API_KEY
+iyzico_options.secret_key = IYZICO_SECRET_KEY
+iyzico_options.base_url = IYZICO_BASE_URL
 
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-this-later')
 app.secret_key = app.config['SECRET_KEY']
@@ -268,7 +267,8 @@ def get_rate_api(currency):
         url = f"https://open.er-api.com/v6/latest/{code}"
         res = requests.get(url, timeout=5).json()
         if res.get("result") == "success":
-            return res['rates']['TRY']
+            rate = res['rates']['TRY']
+            return jsonify({"success": True, "text": f"Live {code} Rate: ₺{rate:.2f}"})
     except:
         pass
     return jsonify({"success": False, "text": "Rate Connection Error"})
