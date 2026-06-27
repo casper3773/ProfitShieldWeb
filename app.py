@@ -155,7 +155,6 @@ def logout():
 @app.route('/iyzico-payment')
 @login_required
 def iyzico_payment():
-    """Kullanıcıyı iYziCo test ödeme formuna hazırlar ve formu ekranda gösterir."""
     buyer = {
         'id': str(current_user.id),
         'name': str(current_user.username),
@@ -202,14 +201,20 @@ def iyzico_payment():
     }
 
     try:
-        # iYziCo API isteğini oluşturuyoruz
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
         
-        # Nesnenin ham içeriğini güvenli şekilde çekip JSON'a dönüştürüyoruz
-        response_content = checkout_form_initialize._content.decode('utf-8')
+        # Kesin Çözüm: Gelen nesne türü ne olursa olsun (urllib3 response veya iyzipay objesi) string'e çeviriyoruz
+        if hasattr(checkout_form_initialize, 'read'):
+            response_content = checkout_form_initialize.read()
+        elif hasattr(checkout_form_initialize, '_content'):
+            response_content = checkout_form_initialize._content
+        else:
+            response_content = str(checkout_form_initialize)
+            
+        if isinstance(response_content, bytes):
+            response_content = response_content.decode('utf-8')
+            
         response_json = json.loads(response_content)
-        
-        # Form içeriğini güvenle çekiyoruz
         payment_form_html = response_json.get('checkoutFormContent')
         
         if payment_form_html:
@@ -223,7 +228,6 @@ def iyzico_payment():
         
 @app.route('/iyzico-callback', methods=['POST'])
 def iyzico_callback():
-    """iYziCo ödeme sonucunu buraya POST eder. Başarılıysa kullanıcıyı PRO yaparız."""
     token = request.form.get('token')
     if not token:
         flash('Geçersiz ödeme isteği.', 'danger')
@@ -234,13 +238,20 @@ def iyzico_callback():
         'token': token
     }
     
-    # Ödeme sonucunu sorguluyoruz
     checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
     
-    # Nesnenin ham içeriğini güvenli şekilde çekip JSON'a dönüştürüyoruz
-    callback_content = checkout_form._content.decode('utf-8')
+    # Callback doğrulamasında da aynı güvenli okuma mekanizmasını uyguluyoruz
+    if hasattr(checkout_form, 'read'):
+        callback_content = checkout_form.read()
+    elif hasattr(checkout_form, '_content'):
+        callback_content = checkout_form._content
+    else:
+        callback_content = str(checkout_form)
+        
+    if isinstance(callback_content, bytes):
+        callback_content = callback_content.decode('utf-8')
+        
     callback_json = json.loads(callback_content)
-    
     payment_status = callback_json.get('paymentStatus')
     
     if payment_status == 'SUCCESS':
