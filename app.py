@@ -303,7 +303,7 @@ def iyzico_payment():
         'basketId': f"BASKET_{current_user.id}",
         'paymentGroup': 'PRODUCT',
         # Ödeme bitince iYziCo'nun kullanıcıyı geri göndereceği Flask rotamız (Tam URL olmalı):
-        'callbackUrl': url_for('iyzico_callback', _external=True),
+        'callbackUrl': url_for('iyzico_callback', _external=True, _scheme='https'),
         'buyer': buyer,
         'shippingAddress': address,
         'billingAddress': address,
