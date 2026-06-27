@@ -9,3 +9,4 @@ openpyxl
 gunicorn
 iyzipay
 pysqlite3-binary
+iyzipay==1.0.46
