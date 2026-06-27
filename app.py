@@ -15,13 +15,11 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# 👇 app = Flask(__name__) SATIRININ HEMEN ALTINA EKLE 👇
 # iYziCo API Ayarları (Sandbox/Test Ortamı)
 IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'sandbox-test-api-key')
 IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'sandbox-test-secret-key')
-IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com' # Test ortamı URL'i
+IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com'
 
-# iYziCo istemci seçeneklerini yapılandırıyoruz
 iyzico_options = {
     'api_key': IYZICO_API_KEY,
     'secret_key': IYZICO_SECRET_KEY,
@@ -30,8 +28,6 @@ iyzico_options = {
 
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-this-later')
 app.secret_key = app.config['SECRET_KEY']
-
-
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -98,7 +94,6 @@ def get_live_rate(currency_code="USD"):
 @app.route('/')
 @login_required
 def home():
-    # 🚨 ESKİ LİNK YERİNE YENİ IYZICO ROTASINA YÖNLENDİRİYORUZ:
     if not current_user.is_subscribed:
         return redirect(url_for('iyzico_payment'))
         
@@ -113,9 +108,7 @@ def register():
         email = request.form.get('email')
         password = request.form.get('password')
         
-        # 🚨 GÜVENLİK DÜZELTMESİ: Yeni kayıt olan herkes kesinlikle 0 (Ücretsiz) başlar!
         is_subscribed = 0 
-        
         hashed_password = generate_password_hash(password)
         
         try:
@@ -158,6 +151,92 @@ def logout():
     logout_user()
     return redirect(url_for('home'))
 
+@app.route('/iyzico-payment')
+@login_required
+def iyzico_payment():
+    """Kullanıcıyı iYziCo test ödeme formuna hazırlar ve formu ekranda gösterir."""
+    buyer = {
+        'id': str(current_user.id),
+        'name': str(current_user.username),
+        'surname': 'ShieldUser',  
+        'gsmNumber': '+905000000000',
+        'email': str(current_user.email),
+        'identityNumber': '11111111111', 
+        'lastLoginDate': '2026-06-27 00:00:00',
+        'registrationDate': '2026-06-27 00:00:00',
+        'registrationAddress': 'Istanbul Turkey',
+        'ip': request.remote_addr if request.remote_addr else '127.0.0.1',
+        'city': 'Istanbul',
+        'country': 'Turkey'
+    }
+    
+    address = {
+        'contactName': str(current_user.username),
+        'city': 'Istanbul',
+        'country': 'Turkey',
+        'address': 'Istanbul Turkey'
+    }
+
+    basket_item = {
+        'id': 'PRO_CLUB_01',
+        'name': 'Profit Shield PRO Membership',
+        'category': 'Software',
+        'itemType': 'VIRTUAL',
+        'price': '299.00' 
+    }
+
+    request_data = {
+        'locale': 'tr',
+        'conversationId': f"PROSHIELD_{current_user.id}", 
+        'price': '299.00',
+        'paidPrice': '299.00',
+        'currency': 'TRY',
+        'basketId': f"BASKET_{current_user.id}",
+        'paymentGroup': 'PRODUCT',
+        'callbackUrl': url_for('iyzico_callback', _external=True, _scheme='https'),
+        'buyer': buyer,
+        'shippingAddress': address,
+        'billingAddress': address,
+        'basketItems': [basket_item]
+    }
+
+    checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
+    payment_form_html = checkout_form_initialize.get('checkoutFormContent')
+    
+    return render_template('iyzico_payment.html', payment_form=payment_form_html)
+
+@app.route('/iyzico-callback', methods=['POST'])
+def iyzico_callback():
+    """iYziCo ödeme sonucunu buraya POST eder. Başarılıysa kullanıcıyı PRO yaparız."""
+    token = request.form.get('token')
+    if not token:
+        flash('Geçersiz ödeme isteği.', 'danger')
+        return redirect(url_for('iyzico_payment'))
+        
+    request_data = {
+        'locale': 'tr',
+        'token': token
+    }
+    
+    checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
+    payment_status = checkout_form.get('paymentStatus')
+    
+    if payment_status == 'SUCCESS':
+        conversation_id = checkout_form.get('conversationId')
+        user_id = conversation_id.split('_')[1]
+        
+        conn = sqlite3.connect('profitshield.db')
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
+        return redirect(url_for('home'))
+    else:
+        flash("Ödeme işlemi başarısız oldu veya iptal edildi.", "danger")
+        return redirect(url_for('iyzico_payment'))
+
 @app.route('/api/read-columns', methods=['POST'])
 @login_required
 def read_columns():
@@ -189,8 +268,7 @@ def get_rate_api(currency):
         url = f"https://open.er-api.com/v6/latest/{code}"
         res = requests.get(url, timeout=5).json()
         if res.get("result") == "success":
-            rate = res['rates']['TRY']
-            return jsonify({"success": True, "text": f"Live {code} Rate: ₺{rate:.2f}"})
+            return res['rates']['TRY']
     except:
         pass
     return jsonify({"success": False, "text": "Rate Connection Error"})
@@ -258,100 +336,6 @@ def process_report():
         return response
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-
-@app.route('/iyzico-payment')
-@login_required
-def iyzico_payment():
-    """Kullanıcıyı iYziCo test ödeme formuna hazırlar ve formu ekranda gösterir."""
-    buyer = {
-        'id': str(current_user.id),
-        'name': current_user.username,
-        'surname': 'User', # Boş kalmaması için geçici default değer
-        'gsmNumber': '+905000000000',
-        'email': current_user.email,
-        'identityNumber': '11111111111', # Test ortamı için sahte TC
-        'lastLoginDate': '2026-06-27 00:00:00',
-        'registrationDate': '2026-06-27 00:00:00',
-        'registrationAddress': 'Istanbul, Turkey',
-        'ip': request.remote_addr,
-        'city': 'Istanbul',
-        'country': 'Turkey'
-    }
-    
-    address = {
-        'contactName': current_user.username,
-        'city': 'Istanbul',
-        'country': 'Turkey',
-        'address': 'Istanbul, Turkey'
-    }
-
-    # Ödeme yapılacak ürün bilgisi
-    basket_item = {
-        'id': 'PRO_CLUB_01',
-        'name': 'Profit Shield PRO Membership',
-        'category': 'Software/SaaS',
-        'itemType': 'VIRTUAL',
-        'price': '299.00' # Aylık abonelik veya tek çekim test fiyatı (TL)
-    }
-
-    request_data = {
-        'locale': 'tr',
-        'conversationId': f"盾_{current_user.id}", # Benzersiz bir işlem ID'si
-        'price': '299.00',
-        'paidPrice': '299.00',
-        'currency': 'TRY',
-        'basketId': f"BASKET_{current_user.id}",
-        'paymentGroup': 'PRODUCT',
-        # Ödeme bitince iYziCo'nun kullanıcıyı geri göndereceği Flask rotamız (Tam URL olmalı):
-        'callbackUrl': url_for('iyzico_callback', _external=True, _scheme='https'),
-        'buyer': buyer,
-        'shippingAddress': address,
-        'billingAddress': address,
-        'basketItems': [basket_item]
-    }
-
-    # iYziCo API'sine formu oluşturması için istek atıyoruz
-    checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
-    
-    # iYziCo'nun bize ürettiği HTML form kodunu alıyoruz
-    payment_form_html = checkout_form_initialize.get('checkoutFormContent')
-    
-    # Formu ekranda render etmek için yeni bir HTML şablonuna göndereceğiz
-    return render_template('iyzico_payment.html', payment_form=payment_form_html)
-
-
-@app.route('/iyzico-callback', methods=['POST'])
-def iyzico_callback():
-    """iYziCo ödeme sonucunu buraya POST eder. Başarılıysa kullanıcıyı PRO yaparız."""
-    token = request.form.get('token')
-    
-    request_data = {
-        'locale': 'tr',
-        'token': token
-    }
-    
-    # iYziCo'ya "Bu token'lı ödeme gerçekten başarılı oldu mu?" diye soruyoruz
-    checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
-    payment_status = checkout_form.get('paymentStatus')
-    
-    if payment_status == 'SUCCESS':
-        # Ödemeyi yapan kullanıcının ID'sini iYziCo'ya gönderdiğimiz conversationId içinden geri çekiyoruz
-        conversation_id = checkout_form.get('conversationId')
-        user_id = conversation_id.split('_')[1]
-        
-        # Veritabanında aboneyi PRO (1) yapıyoruz
-        conn = sqlite3.connect('profitshield.db')
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
-        conn.commit()
-        conn.close()
-        
-        flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
-        return redirect(url_for('home'))
-    else:
-        flash("Ödeme işlemi başarısız oldu veya iptal edildi.", "danger")
-        return redirect(url_for('home'))
-
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
