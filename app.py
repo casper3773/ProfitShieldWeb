@@ -202,12 +202,25 @@ def iyzico_payment():
     }
 
     try:
+        # iYziCo API isteğini oluşturuyoruz
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
-        payment_form_html = checkout_form_initialize.get('checkoutFormContent')
-        return render_template('iyzico_payment.html', payment_form=payment_form_html)
+        
+        # Nesnenin ham içeriğini güvenli şekilde çekip JSON'a dönüştürüyoruz
+        response_content = checkout_form_initialize._content.decode('utf-8')
+        response_json = json.loads(response_content)
+        
+        # Form içeriğini güvenle çekiyoruz
+        payment_form_html = response_json.get('checkoutFormContent')
+        
+        if payment_form_html:
+            return render_template('iyzico_payment.html', payment_form=payment_form_html)
+        else:
+            error_msg = response_json.get('errorMessage', 'Bilinmeyen bir iYziCo hatası oluştu.')
+            return f"iYziCo API Hatası: {error_msg}"
+            
     except Exception as e:
         return f"iYziCo Form Error: {str(e)}"
-
+        
 @app.route('/iyzico-callback', methods=['POST'])
 def iyzico_callback():
     """iYziCo ödeme sonucunu buraya POST eder. Başarılıysa kullanıcıyı PRO yaparız."""
@@ -221,11 +234,17 @@ def iyzico_callback():
         'token': token
     }
     
+    # Ödeme sonucunu sorguluyoruz
     checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
-    payment_status = checkout_form.get('paymentStatus')
+    
+    # Nesnenin ham içeriğini güvenli şekilde çekip JSON'a dönüştürüyoruz
+    callback_content = checkout_form._content.decode('utf-8')
+    callback_json = json.loads(callback_content)
+    
+    payment_status = callback_json.get('paymentStatus')
     
     if payment_status == 'SUCCESS':
-        conversation_id = checkout_form.get('conversationId')
+        conversation_id = callback_json.get('conversationId')
         user_id = conversation_id.split('_')[1]
         
         conn = sqlite3.connect('profitshield.db')
