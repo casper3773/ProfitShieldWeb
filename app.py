@@ -6,21 +6,32 @@ import requests
 import pandas as pd
 import sqlite3
 import io
+import iyzipay
 import json
 import os
-import hmac
-import hashlib
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
 
+# 👇 app = Flask(__name__) SATIRININ HEMEN ALTINA EKLE 👇
+# iYziCo API Ayarları (Sandbox/Test Ortamı)
+IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'sandbox-test-api-key')
+IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'sandbox-test-secret-key')
+IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com' # Test ortamı URL'i
+
+# iYziCo istemci seçeneklerini yapılandırıyoruz
+iyzico_options = {
+    'api_key': IYZICO_API_KEY,
+    'secret_key': IYZICO_SECRET_KEY,
+    'base_url': IYZICO_BASE_URL
+}
+
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'super-secret-key-change-this-later')
 app.secret_key = app.config['SECRET_KEY']
 
-LEMON_WEBHOOK_SECRET = os.environ.get('LEMON_WEBHOOK_SECRET')
-LEMON_CHECKOUT_URL = os.environ.get('LEMON_CHECKOUT_URL')
+
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -87,9 +98,9 @@ def get_live_rate(currency_code="USD"):
 @app.route('/')
 @login_required
 def home():
-    # 🚨 GÜVENLİK KONTROLÜ: Eğer kullanıcı PRO değilse doğrudan Lemon Squeezy ödeme ekranına yönlendir!
+    # 🚨 ESKİ LİNK YERİNE YENİ IYZICO ROTASINA YÖNLENDİRİYORUZ:
     if not current_user.is_subscribed:
-        return redirect(url_for('create_checkout_session'))
+        return redirect(url_for('iyzico_payment'))
         
     rate = get_live_rate("USD")
     rate_text = f"Live USD Rate: ₺{rate:.2f}" if rate else "Live Rate: Connection Error"
@@ -248,56 +259,99 @@ def process_report():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-@app.route('/create-checkout-session', methods=['GET', 'POST'])
+@app.route('/iyzico-payment')
 @login_required
-def create_checkout_session():
-    if LEMON_CHECKOUT_URL:
-        checkout_link = f"{LEMON_CHECKOUT_URL}?checkout[email]={current_user.email}"
-        return redirect(checkout_link, code=303)
+def iyzico_payment():
+    """Kullanıcıyı iYziCo test ödeme formuna hazırlar ve formu ekranda gösterir."""
+    buyer = {
+        'id': str(current_user.id),
+        'name': current_user.username,
+        'surname': 'User', # Boş kalmaması için geçici default değer
+        'gsmNumber': '+905000000000',
+        'email': current_user.email,
+        'identityNumber': '11111111111', # Test ortamı için sahte TC
+        'lastLoginDate': '2026-06-27 00:00:00',
+        'registrationDate': '2026-06-27 00:00:00',
+        'registrationAddress': 'Istanbul, Turkey',
+        'ip': request.remote_addr,
+        'city': 'Istanbul',
+        'country': 'Turkey'
+    }
     
-    # Yedek simülasyon (Gerçek canlıda burası çalışmaz, üstteki if bloğu çalışır)
-    conn = sqlite3.connect('profitshield.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (current_user.id,))
-    conn.commit()
-    conn.close()
-    flash("Lemon Squeezy Linki bulunamadı, yerel simülasyon aktif edildi! PRO oldunuz.", "success")
-    return redirect(url_for('home'))
+    address = {
+        'contactName': current_user.username,
+        'city': 'Istanbul',
+        'country': 'Turkey',
+        'address': 'Istanbul, Turkey'
+    }
 
-@app.route('/lemon-webhook', methods=['POST'])
-def lemon_webhook():
-    signature = request.headers.get('X-Signature')
-    if not signature:
-        return 'Missing signature', 400
+    # Ödeme yapılacak ürün bilgisi
+    basket_item = {
+        'id': 'PRO_CLUB_01',
+        'name': 'Profit Shield PRO Membership',
+        'category': 'Software/SaaS',
+        'itemType': 'VIRTUAL',
+        'price': '299.00' # Aylık abonelik veya tek çekim test fiyatı (TL)
+    }
 
-    secret = bytes(LEMON_WEBHOOK_SECRET, 'utf-8') if LEMON_WEBHOOK_SECRET else b''
-    digest = hmac.new(secret, request.data, hashlib.sha256).hexdigest()
+    request_data = {
+        'locale': 'tr',
+        'conversationId': f"盾_{current_user.id}", # Benzersiz bir işlem ID'si
+        'price': '299.00',
+        'paidPrice': '299.00',
+        'currency': 'TRY',
+        'basketId': f"BASKET_{current_user.id}",
+        'paymentGroup': 'PRODUCT',
+        # Ödeme bitince iYziCo'nun kullanıcıyı geri göndereceği Flask rotamız (Tam URL olmalı):
+        'callbackUrl': url_for('iyzico_callback', _external=True),
+        'buyer': buyer,
+        'shippingAddress': address,
+        'billingAddress': address,
+        'basketItems': [basket_item]
+    }
+
+    # iYziCo API'sine formu oluşturması için istek atıyoruz
+    checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
     
-    if not hmac.compare_digest(digest, signature):
-        return 'Invalid signature', 400
-
-    event_data = request.json
-    event_name = event_data.get('meta', {}).get('event_name')
+    # iYziCo'nun bize ürettiği HTML form kodunu alıyoruz
+    payment_form_html = checkout_form_initialize.get('checkoutFormContent')
     
-    if event_name in ['subscription_created', 'subscription_payment_success']:
-        customer_email = event_data.get('data', {}).get('attributes', {}).get('user_email')
-        if customer_email:
-            conn = sqlite3.connect('profitshield.db')
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET is_subscribed = 1 WHERE email = ?", (customer_email,))
-            conn.commit()
-            conn.close()
-            
-    elif event_name in ['subscription_cancelled', 'subscription_expired']:
-        customer_email = event_data.get('data', {}).get('attributes', {}).get('user_email')
-        if customer_email:
-            conn = sqlite3.connect('profitshield.db')
-            cursor = conn.cursor()
-            cursor.execute("UPDATE users SET is_subscribed = 0 WHERE email = ?", (customer_email,))
-            conn.commit()
-            conn.close()
+    # Formu ekranda render etmek için yeni bir HTML şablonuna göndereceğiz
+    return render_template('iyzico_payment.html', payment_form=payment_form_html)
 
-    return 'OK', 200
+
+@app.route('/iyzico-callback', methods=['POST'])
+def iyzico_callback():
+    """iYziCo ödeme sonucunu buraya POST eder. Başarılıysa kullanıcıyı PRO yaparız."""
+    token = request.form.get('token')
+    
+    request_data = {
+        'locale': 'tr',
+        'token': token
+    }
+    
+    # iYziCo'ya "Bu token'lı ödeme gerçekten başarılı oldu mu?" diye soruyoruz
+    checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
+    payment_status = checkout_form.get('paymentStatus')
+    
+    if payment_status == 'SUCCESS':
+        # Ödemeyi yapan kullanıcının ID'sini iYziCo'ya gönderdiğimiz conversationId içinden geri çekiyoruz
+        conversation_id = checkout_form.get('conversationId')
+        user_id = conversation_id.split('_')[1]
+        
+        # Veritabanında aboneyi PRO (1) yapıyoruz
+        conn = sqlite3.connect('profitshield.db')
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        
+        flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
+        return redirect(url_for('home'))
+    else:
+        flash("Ödeme işlemi başarısız oldu veya iptal edildi.", "danger")
+        return redirect(url_for('home'))
+
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
