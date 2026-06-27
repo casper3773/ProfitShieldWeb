@@ -18,7 +18,7 @@ app = Flask(__name__)
 # iYziCo API Ayarları (Sandbox/Test Ortamı)
 IYZICO_API_KEY = os.environ.get('IYZICO_API_KEY', 'sandbox-test-api-key')
 IYZICO_SECRET_KEY = os.environ.get('IYZICO_SECRET_KEY', 'sandbox-test-secret-key')
-IYZICO_BASE_URL = 'https://sandbox-api.iyzipay.com'
+IYZICO_BASE_URL = 'sandbox-api.iyzipay.com'
 
 # iYziCo Python SDK için standart dictionary yapısı
 iyzico_options = {
