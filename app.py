@@ -203,7 +203,6 @@ def iyzico_payment():
     try:
         checkout_form_initialize = iyzipay.CheckoutFormInitialize().create(request_data, iyzico_options)
         
-        # Kesin Çözüm: Gelen nesne türü ne olursa olsun (urllib3 response veya iyzipay objesi) string'e çeviriyoruz
         if hasattr(checkout_form_initialize, 'read'):
             response_content = checkout_form_initialize.read()
         elif hasattr(checkout_form_initialize, '_content'):
@@ -238,37 +237,54 @@ def iyzico_callback():
         'token': token
     }
     
-    checkout_form = iyzipay.CheckoutForm().retrieve(request_data, iyzico_options)
+    # URL Düzeltildi: 'https://' kaldırıldı, küresel ayarlarla eşitlendi.
+    options = {
+        'api_key': os.getenv('IYZICO_API_KEY', IYZICO_API_KEY),
+        'secret_key': os.getenv('IYZICO_SECRET_KEY', IYZICO_SECRET_KEY),
+        'base_url': IYZICO_BASE_URL
+    }
     
-    # Callback doğrulamasında da aynı güvenli okuma mekanizmasını uyguluyoruz
-    if hasattr(checkout_form, 'read'):
-        callback_content = checkout_form.read()
-    elif hasattr(checkout_form, '_content'):
-        callback_content = checkout_form._content
-    else:
-        callback_content = str(checkout_form)
+    try:
+        checkout_form = iyzipay.CheckoutForm().retrieve(request_data, options)
         
-    if isinstance(callback_content, bytes):
-        callback_content = callback_content.decode('utf-8')
+        if hasattr(checkout_form, 'read'):
+            callback_content = checkout_form.read()
+        elif hasattr(checkout_form, '_content'):
+            callback_content = checkout_form._content
+        else:
+            callback_content = str(checkout_form)
+            
+        if isinstance(callback_content, bytes):
+            callback_content = callback_content.decode('utf-8')
+            
+        callback_json = json.loads(callback_content)
+        payment_status = callback_json.get('paymentStatus')
         
-    callback_json = json.loads(callback_content)
-    payment_status = callback_json.get('paymentStatus')
-    
-    if payment_status == 'SUCCESS':
-        conversation_id = callback_json.get('conversationId')
-        user_id = conversation_id.split('_')[1]
-        
-        conn = sqlite3.connect('profitshield.db')
-        cursor = conn.cursor()
-        cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
-        conn.commit()
-        conn.close()
-        
-        flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
-        return redirect(url_for('home'))
-    else:
-        flash("Ödeme işlemi başarısız oldu veya iptal edildi.", "danger")
-        return redirect(url_for('iyzico_payment'))
+        if payment_status == 'SUCCESS':
+            conversation_id = callback_json.get('conversationId')
+            
+            if conversation_id and '_' in conversation_id:
+                user_id = conversation_id.split('_')[1]
+            else:
+                user_id = current_user.id if current_user.is_authenticated else None
+
+            if user_id:
+                conn = sqlite3.connect('profitshield.db')
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
+                conn.commit()
+                conn.close()
+                flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
+                return redirect(url_for('home'))
+            else:
+                return "Callback Hatası: Ödeme başarılı fakat kullanıcı ID'si tespit edilemedi."
+        else:
+            error_msg = callback_json.get('errorMessage', 'Ödeme işlemi başarısız oldu veya iptal edildi.')
+            flash(error_msg, "danger")
+            return redirect(url_for('iyzico_payment'))
+            
+    except Exception as e:
+        return f"Callback İşleme Hatası: {str(e)}"
 
 @app.route('/api/read-columns', methods=['POST'])
 @login_required
