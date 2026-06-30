@@ -180,16 +180,16 @@ def iyzico_payment():
     basket_item = {
         'id': 'PRO_CLUB_01',
         'name': 'Profit Shield PRO Membership',
-        'category': 'Software',
+        'category1': 'Software',
         'itemType': 'VIRTUAL',
-        'price': '299.00' 
+        'price': '499.00' 
     }
 
     request_data = {
         'locale': 'tr',
         'conversationId': f"PROSHIELD_{current_user.id}", 
-        'price': '299.00',
-        'paidPrice': '299.00',
+        'price': '499.00',
+        'paidPrice': '499.00',
         'currency': 'TRY',
         'basketId': f"BASKET_{current_user.id}",
         'paymentGroup': 'PRODUCT',
