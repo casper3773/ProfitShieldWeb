@@ -5,6 +5,7 @@ from functools import wraps
 import requests
 import pandas as pd
 import sqlite3
+import psycopg2  # <-- PostgreSQL için eklendi
 import io
 import iyzipay
 import json
@@ -34,21 +35,50 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# --- AKILLI VERİTABANI BAĞLANTI FONKSİYONU ---
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+def get_db_connection():
+    # Eğer Render üzerindeysek ve DATABASE_URL tanımlıysa PostgreSQL'e bağlan
+    if DATABASE_URL:
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return psycopg2.connect(url)
+    else:
+        # Kendi bilgisayarındayken SQLite ile lokalde çalışmaya devam et
+        return sqlite3.connect('profitshield.db')
+
 def init_db():
-    conn = sqlite3.connect('profitshield.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            is_subscribed INTEGER DEFAULT 0
-        )
-    ''')
+    
+    if DATABASE_URL:
+        # Sunucu (PostgreSQL) için Tablo Oluşturma
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(80) UNIQUE NOT NULL,
+                email VARCHAR(120) UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                is_subscribed INTEGER DEFAULT 0
+            )
+        ''')
+    else:
+        # Yerel Bilgisayar (SQLite) için Tablo Oluşturma
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                is_subscribed INTEGER DEFAULT 0
+            )
+        ''')
     conn.commit()
     conn.close()
 
+# Veritabanını ayağa kaldır
 init_db()
 
 class User(UserMixin):
@@ -60,11 +90,15 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect('profitshield.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, email, is_subscribed FROM users WHERE id = ?", (user_id,))
+    
+    # SQLite için ?, PostgreSQL için %s ayarı
+    param_char = "%s" if DATABASE_URL else "?"
+    cursor.execute(f"SELECT id, username, email, is_subscribed FROM users WHERE id = {param_char}", (int(user_id),))
     user_data = cursor.fetchone()
     conn.close()
+    
     if user_data:
         return User(user_data[0], user_data[1], user_data[2], user_data[3])
     return None
@@ -113,14 +147,16 @@ def register():
         hashed_password = generate_password_hash(password)
         
         try:
-            conn = sqlite3.connect('profitshield.db')
+            conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO users (username, email, password, is_subscribed) VALUES (?, ?, ?, ?)",
+            
+            param_char = "%s" if DATABASE_URL else "?"
+            cursor.execute(f"INSERT INTO users (username, email, password, is_subscribed) VALUES ({param_char}, {param_char}, {param_char}, {param_char})",
                            (username, email, hashed_password, is_subscribed))
             conn.commit()
             conn.close()
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, psycopg2.IntegrityError):
             return "Username or Email already exists!"
             
     return render_template('register.html')
@@ -131,9 +167,11 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         
-        conn = sqlite3.connect('profitshield.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, password, is_subscribed FROM users WHERE email = ?", (email,))
+        
+        param_char = "%s" if DATABASE_URL else "?"
+        cursor.execute(f"SELECT id, username, email, password, is_subscribed FROM users WHERE email = {param_char}", (email,))
         user_data = cursor.fetchone()
         conn.close()
         
@@ -237,7 +275,6 @@ def iyzico_callback():
         'token': token
     }
     
-    # URL Düzeltildi: 'https://' kaldırıldı, küresel ayarlarla eşitlendi.
     options = {
         'api_key': os.getenv('IYZICO_API_KEY', IYZICO_API_KEY),
         'secret_key': os.getenv('IYZICO_SECRET_KEY', IYZICO_SECRET_KEY),
@@ -269,9 +306,11 @@ def iyzico_callback():
                 user_id = current_user.id if current_user.is_authenticated else None
 
             if user_id:
-                conn = sqlite3.connect('profitshield.db')
+                conn = get_db_connection()
                 cursor = conn.cursor()
-                cursor.execute("UPDATE users SET is_subscribed = 1 WHERE id = ?", (user_id,))
+                
+                param_char = "%s" if DATABASE_URL else "?"
+                cursor.execute(f"UPDATE users SET is_subscribed = 1 WHERE id = {param_char}", (int(user_id),))
                 conn.commit()
                 conn.close()
                 flash("Ödeme başarılı! Profit Shield PRO dünyasına hoş geldiniz.", "success")
